@@ -5,7 +5,6 @@ node_modules/
 .env
 .env.local
 .env.production
-.env.example
 
 # logs
 npm-debug.log*

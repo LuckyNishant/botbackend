@@ -85,7 +85,8 @@ npm run dev
 - Backend/Bot: Render
 - Keep alive: UptimeRobot
 - Backend base URL: `https://luckymobilebackend.onrender.com`
-- Render blueprint file: `render.yaml` at repo root
+- If the Render service is configured as a Docker web service, deploy from the backend repo root so Render can find `Dockerfile`
+- The Docker image installs Chromium and uses `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium` for `whatsapp-web.js`
 
 For production, run WhatsApp bot on a persistent instance with stable storage for session data.
 # botbackend

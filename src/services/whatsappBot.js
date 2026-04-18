@@ -16,11 +16,14 @@ class WhatsAppBot {
     this.controlService = controlService;
     this.enabled = config.bot.enabled;
 
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+
     this.client = new Client({
       authStrategy: new LocalAuth({ clientId: config.bot.sessionName }),
       puppeteer: {
         headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"]
+        executablePath: executablePath || undefined,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
       }
     });
 
