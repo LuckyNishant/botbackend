@@ -9,10 +9,11 @@ const {
 } = require("./messageParser");
 
 class WhatsAppBot {
-  constructor({ sheetsService, groqService, orderService }) {
+  constructor({ sheetsService, groqService, orderService, controlService }) {
     this.sheetsService = sheetsService;
     this.groqService = groqService;
     this.orderService = orderService;
+    this.controlService = controlService;
     this.enabled = config.bot.enabled;
 
     this.client = new Client({
@@ -28,10 +29,39 @@ class WhatsAppBot {
 
   setEnabled(enabled) {
     this.enabled = Boolean(enabled);
+    return this.controlService.setBotEnabled(this.enabled);
   }
 
   isEnabled() {
     return this.enabled;
+  }
+
+  async hydrateControlSettings() {
+    this.enabled = await this.controlService.getBotEnabled(config.bot.enabled);
+  }
+
+  async getSelectedGroups() {
+    return this.controlService.listGroups();
+  }
+
+  async addGroup(groupId, groupName) {
+    return this.controlService.addGroup(groupId, groupName);
+  }
+
+  async removeGroup(groupId) {
+    return this.controlService.removeGroup(groupId);
+  }
+
+  async getWhitelistedNumbers() {
+    return this.controlService.listWhitelistNumbers();
+  }
+
+  async addWhitelistNumber(phoneNumber, label) {
+    return this.controlService.addWhitelistNumber(phoneNumber, label);
+  }
+
+  async removeWhitelistNumber(phoneNumber) {
+    return this.controlService.removeWhitelistNumber(phoneNumber);
   }
 
   registerHandlers() {
@@ -55,9 +85,20 @@ class WhatsAppBot {
     const userKey = chat.id._serialized;
 
     if (config.bot.allowedPhones.length && !config.bot.allowedPhones.includes(phone)) return;
-    if (chat.isGroup && config.bot.allowedGroups.length && !config.bot.allowedGroups.includes(chat.id._serialized)) return;
+    if (
+      chat.isGroup &&
+      config.bot.allowedGroups.length &&
+      !config.bot.allowedGroups.includes(chat.id._serialized)
+    ) {
+      return;
+    }
 
-    const whitelisted = await this.sheetsService.isWhitelisted(phone);
+    if (chat.isGroup) {
+      const groupAllowed = await this.controlService.isGroupAllowed(chat.id._serialized);
+      if (!groupAllowed) return;
+    }
+
+    const whitelisted = await this.controlService.isWhitelisted(phone);
     if (!whitelisted) return;
 
     const customer = (await this.sheetsService.getCustomerByNumber(phone)) || {

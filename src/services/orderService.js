@@ -1,18 +1,26 @@
 class OrderService {
-  constructor({ sheetsService, fcmService }) {
+  constructor({ sheetsService, fcmService, controlService }) {
     this.sheetsService = sheetsService;
     this.fcmService = fcmService;
+    this.controlService = controlService;
     this.lastOrderContext = new Map();
     this.adminDeviceToken = "";
     this.notificationsEnabled = true;
   }
 
-  setAdminDeviceToken(token) {
-    this.adminDeviceToken = token || "";
+  async hydrateControlSettings() {
+    this.adminDeviceToken = await this.controlService.getAdminDeviceToken("");
+    this.notificationsEnabled = await this.controlService.getNotificationsEnabled(true);
   }
 
-  setNotificationsEnabled(enabled) {
+  async setAdminDeviceToken(token) {
+    this.adminDeviceToken = token || "";
+    await this.controlService.setAdminDeviceToken(this.adminDeviceToken);
+  }
+
+  async setNotificationsEnabled(enabled) {
     this.notificationsEnabled = Boolean(enabled);
+    await this.controlService.setNotificationsEnabled(this.notificationsEnabled);
   }
 
   cacheDraft(userKey, draft) {

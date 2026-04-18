@@ -13,8 +13,10 @@ WhatsApp + AI + Inventory automation backend for Lucky Mobile Manasa.
   - Invoice
   - Purchase
   - Customers
-  - Whitelist
-  - Groups (available for extension)
+- MongoDB integration:
+  - Whitelist numbers (admin controlled)
+  - Allowed groups (admin controlled)
+  - Bot + notification control settings
 - Auto flow on confirm:
   - stock check
   - invoice create
@@ -26,6 +28,8 @@ WhatsApp + AI + Inventory automation backend for Lucky Mobile Manasa.
   - Purchase entry
   - Bot on/off
   - FCM token + notification toggle
+  - Group selection for bot messaging
+  - Whitelist number management
 
 ## Project Structure
 
@@ -53,6 +57,7 @@ npm install
 ```
 
 2. Create `.env` from `.env.example` and fill:
+   - MongoDB connection string
    - Groq API key
    - Google Sheets credentials
    - Firebase Admin credentials
@@ -72,8 +77,6 @@ npm run dev
 - `Invoice` -> `Date | Customer | Model | Part | Qty | Price | Total`
 - `Purchase` -> `Date | Model | Part | Qty | Cost | Supplier`
 - `Customers` -> `Number | Shop | Location | Type`
-- `Whitelist` -> `Number`
-- `Groups` -> `GroupId | Name`
 - `AdminConfig` -> `Key | Value`
 
 ## Deployment Notes

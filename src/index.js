@@ -6,18 +6,26 @@ const { GroqService } = require("./services/groqService");
 const { FcmService } = require("./services/fcmService");
 const { OrderService } = require("./services/orderService");
 const { WhatsAppBot } = require("./services/whatsappBot");
+const { ControlService } = require("./services/controlService");
+const { connectMongo } = require("./db/mongo");
 const { buildAdminRoutes } = require("./routes/adminRoutes");
 
 async function bootstrap() {
+  await connectMongo();
+
   const sheetsService = new SheetsService();
   await sheetsService.init();
 
+  const controlService = new ControlService();
   const groqService = new GroqService();
   const fcmService = new FcmService();
   fcmService.init();
 
-  const orderService = new OrderService({ sheetsService, fcmService });
-  const bot = new WhatsAppBot({ sheetsService, groqService, orderService });
+  const orderService = new OrderService({ sheetsService, fcmService, controlService });
+  const bot = new WhatsAppBot({ sheetsService, groqService, orderService, controlService });
+
+  await orderService.hydrateControlSettings();
+  await bot.hydrateControlSettings();
 
   const app = express();
   app.use(

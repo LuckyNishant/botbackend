@@ -29,7 +29,11 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
         todayOrders,
         lowStockAlertCount: lowStockItems.length,
         lowStockItems,
-        recentOrders: invoiceRows.slice(-10).reverse()
+        recentOrders: invoiceRows.slice(-10).reverse(),
+        whitelistedNumbers: await botController.getWhitelistedNumbers(),
+        selectedGroups: await botController.getSelectedGroups(),
+        botEnabled: botController.isEnabled(),
+        notificationsEnabled: orderService.notificationsEnabled
       });
     } catch (error) {
       next(error);
@@ -63,8 +67,7 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
   router.post("/notifications/device-token", async (req, res, next) => {
     try {
       const { token } = req.body;
-      orderService.setAdminDeviceToken(token);
-      await sheetsService.setAdminConfigValue("adminDeviceToken", token);
+      await orderService.setAdminDeviceToken(token);
       res.json({ ok: true });
     } catch (error) {
       next(error);
@@ -74,18 +77,77 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
   router.post("/notifications/toggle", async (req, res, next) => {
     try {
       const { enabled } = req.body;
-      orderService.setNotificationsEnabled(Boolean(enabled));
-      await sheetsService.setAdminConfigValue("notificationsEnabled", String(Boolean(enabled)));
+      await orderService.setNotificationsEnabled(Boolean(enabled));
       res.json({ ok: true, enabled: Boolean(enabled) });
     } catch (error) {
       next(error);
     }
   });
 
-  router.post("/bot/toggle", async (req, res) => {
+  router.post("/bot/toggle", async (req, res, next) => {
+    try {
     const { enabled } = req.body;
-    botController.setEnabled(Boolean(enabled));
+    await botController.setEnabled(Boolean(enabled));
     res.json({ ok: true, enabled: botController.isEnabled() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/bot/groups", async (_req, res, next) => {
+    try {
+      res.json({ groups: await botController.getSelectedGroups() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/bot/groups", async (req, res, next) => {
+    try {
+      const { groupId, groupName } = req.body;
+      if (!groupId) return res.status(400).json({ error: "groupId is required" });
+      await botController.addGroup(groupId, groupName || "");
+      res.json({ ok: true, groups: await botController.getSelectedGroups() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/bot/groups/:groupId", async (req, res, next) => {
+    try {
+      await botController.removeGroup(req.params.groupId);
+      res.json({ ok: true, groups: await botController.getSelectedGroups() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/bot/whitelist", async (_req, res, next) => {
+    try {
+      res.json({ numbers: await botController.getWhitelistedNumbers() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/bot/whitelist", async (req, res, next) => {
+    try {
+      const { phoneNumber, label } = req.body;
+      if (!phoneNumber) return res.status(400).json({ error: "phoneNumber is required" });
+      await botController.addWhitelistNumber(phoneNumber, label || "");
+      res.json({ ok: true, numbers: await botController.getWhitelistedNumbers() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.delete("/bot/whitelist/:phoneNumber", async (req, res, next) => {
+    try {
+      await botController.removeWhitelistNumber(req.params.phoneNumber);
+      res.json({ ok: true, numbers: await botController.getWhitelistedNumbers() });
+    } catch (error) {
+      next(error);
+    }
   });
 
   return router;

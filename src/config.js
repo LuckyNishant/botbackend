@@ -34,5 +34,9 @@ module.exports = {
     projectId: process.env.FIREBASE_PROJECT_ID || "",
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "",
     privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n")
+  },
+  mongodb: {
+    uri: process.env.MONGODB_URI || "",
+    dbName: process.env.MONGODB_DB_NAME || "luckymobile"
   }
 };
