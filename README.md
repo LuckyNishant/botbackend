@@ -82,6 +82,7 @@ npm run dev
 - Backend/Bot: Render
 - Keep alive: UptimeRobot
 - Backend base URL: `https://luckymobilebackend.onrender.com`
+- Render blueprint file: `render.yaml` at repo root
 
 For production, run WhatsApp bot on a persistent instance with stable storage for session data.
 # botbackend
