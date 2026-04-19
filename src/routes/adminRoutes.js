@@ -32,6 +32,17 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
         .slice(1)
         .filter((row) => String(row[0] || "").slice(0, 10) === today).length;
 
+      const botEnabled = await safe(() => botController.isEnabled(), false);
+      const botStarted = await safe(() => botController.isStarted(), false);
+      const botLink = await safe(() => botController.getLinkStatus(), {
+        started: false,
+        enabled: false,
+        qr: "",
+        lastError: "Bot status unavailable",
+        connectedAt: null
+      });
+      const mentionPrefix = await safe(() => botController.getMentionPrefix(), "@lucky");
+
       res.json({
         totalStock,
         todayOrders,
@@ -41,11 +52,15 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
         whitelistedNumbers: await safe(() => botController.getWhitelistedNumbers(), []),
         selectedGroups: await safe(() => botController.getSelectedGroups(), []),
         availableGroups: await safe(() => botController.getAvailableGroups(), []),
-        botEnabled: botController.isEnabled(),
-        botStarted: botController.isStarted(),
-        botLink: botController.getLinkStatus(),
-        mentionPrefix: botController.getMentionPrefix(),
-        notificationsEnabled: orderService.notificationsEnabled
+        botEnabled,
+        botStarted,
+        botLink,
+        mentionPrefix,
+        notificationsEnabled: await safe(() => orderService.notificationsEnabled, true),
+        diagnostics: {
+          sheetsReady: Boolean(sheetsService.ready),
+          serverTime: new Date().toISOString()
+        }
       });
     } catch (error) {
       next(error);
