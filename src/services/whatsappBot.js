@@ -15,28 +15,21 @@ class WhatsAppBot {
     this.orderService = orderService;
     this.controlService = controlService;
     this.enabled = config.bot.enabled;
-
-    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-
-    this.client = new Client({
-      authStrategy: new LocalAuth({ clientId: config.bot.sessionName }),
-      puppeteer: {
-        headless: true,
-        executablePath: executablePath || undefined,
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-      }
-    });
-
-    this.registerHandlers();
+    this.client = null;
+    this.started = false;
+    this.startPromise = null;
   }
 
   setEnabled(enabled) {
-    this.enabled = Boolean(enabled);
-    return this.controlService.setBotEnabled(this.enabled);
+    return this.updateEnabled(Boolean(enabled));
   }
 
   isEnabled() {
     return this.enabled;
+  }
+
+  isStarted() {
+    return this.started;
   }
 
   async hydrateControlSettings() {
@@ -67,10 +60,34 @@ class WhatsAppBot {
     return this.controlService.removeWhitelistNumber(phoneNumber);
   }
 
-  registerHandlers() {
-    this.client.on("qr", (qr) => qrcode.generate(qr, { small: true }));
-    this.client.on("ready", () => console.log("WhatsApp bot ready"));
-    this.client.on("message", async (message) => {
+  createClient() {
+    if (this.client) return this.client;
+
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    this.client = new Client({
+      authStrategy: new LocalAuth({ clientId: config.bot.sessionName }),
+      puppeteer: {
+        headless: true,
+        executablePath: executablePath || undefined,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+      }
+    });
+
+    this.registerHandlers(this.client);
+    return this.client;
+  }
+
+  registerHandlers(client) {
+    client.on("qr", (qr) => qrcode.generate(qr, { small: true }));
+    client.on("ready", () => {
+      this.started = true;
+      console.log("WhatsApp bot ready");
+    });
+    client.on("disconnected", (reason) => {
+      this.started = false;
+      console.warn("WhatsApp bot disconnected:", reason);
+    });
+    client.on("message", async (message) => {
       try {
         await this.handleMessage(message);
       } catch (error) {
@@ -155,8 +172,61 @@ class WhatsAppBot {
     }
   }
 
-  async start() {
-    await this.client.initialize();
+  async updateEnabled(enabled) {
+    this.enabled = enabled;
+    await this.controlService.setBotEnabled(this.enabled);
+
+    if (this.enabled) {
+      await this.start({ force: true });
+    } else if (this.client) {
+      await this.stop();
+    }
+
+    return this.enabled;
+  }
+
+  async start(options) {
+    return this.startInternal(options);
+  }
+
+  async startInternal({ force = false } = {}) {
+    if (!this.enabled && !force) {
+      console.log("WhatsApp bot disabled. Skipping startup.");
+      return false;
+    }
+
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+
+    const client = this.createClient();
+    this.startPromise = client
+      .initialize()
+      .then(() => {
+        this.started = true;
+        return true;
+      })
+      .catch((error) => {
+        this.started = false;
+        this.client = null;
+        throw error;
+      })
+      .finally(() => {
+        this.startPromise = null;
+      });
+
+    return this.startPromise;
+  }
+
+  async stop() {
+    if (!this.client) return;
+
+    try {
+      await this.client.destroy();
+    } finally {
+      this.client = null;
+      this.started = false;
+    }
   }
 }
 

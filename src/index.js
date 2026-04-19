@@ -11,15 +11,24 @@ const { connectMongo } = require("./db/mongo");
 const { buildAdminRoutes } = require("./routes/adminRoutes");
 
 async function bootstrap() {
+  console.log("Bootstrapping backend...");
   await connectMongo();
 
   const sheetsService = new SheetsService();
-  await sheetsService.init();
+  try {
+    await sheetsService.init();
+  } catch (error) {
+    console.error("Google Sheets init failed:", error.message);
+  }
 
   const controlService = new ControlService();
   const groqService = new GroqService();
   const fcmService = new FcmService();
-  fcmService.init();
+  try {
+    fcmService.init();
+  } catch (error) {
+    console.error("Firebase init failed:", error.message);
+  }
 
   const orderService = new OrderService({ sheetsService, fcmService, controlService });
   const bot = new WhatsAppBot({ sheetsService, groqService, orderService, controlService });
@@ -46,7 +55,8 @@ async function bootstrap() {
     res.json({
       ok: true,
       service: "Lucky Mobile AI Spare Parts Backend",
-      botEnabled: bot.isEnabled()
+      botEnabled: bot.isEnabled(),
+      botStarted: bot.isStarted()
     });
   });
 
@@ -68,7 +78,11 @@ async function bootstrap() {
     console.log(`Backend running on port ${config.port}`);
   });
 
-  await bot.start();
+  try {
+    await bot.start();
+  } catch (error) {
+    console.error("WhatsApp bot startup failed:", error.message);
+  }
 }
 
 bootstrap().catch((error) => {
