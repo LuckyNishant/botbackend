@@ -5,7 +5,8 @@ const ControlConfig = require("../models/ControlConfig");
 const CONTROL_KEYS = {
   botEnabled: "botEnabled",
   notificationsEnabled: "notificationsEnabled",
-  adminDeviceToken: "adminDeviceToken"
+  adminDeviceToken: "adminDeviceToken",
+  mentionPrefix: "mentionPrefix"
 };
 
 class ControlService {
@@ -41,6 +42,16 @@ class ControlService {
 
   async setAdminDeviceToken(token) {
     return this.setConfigValue(CONTROL_KEYS.adminDeviceToken, String(token || ""));
+  }
+
+  async getMentionPrefix(defaultValue = "@lucky") {
+    const prefix = await this.getConfigValue(CONTROL_KEYS.mentionPrefix, defaultValue);
+    return String(prefix || defaultValue).trim().toLowerCase();
+  }
+
+  async setMentionPrefix(prefix) {
+    const normalized = String(prefix || "@lucky").trim().toLowerCase();
+    return this.setConfigValue(CONTROL_KEYS.mentionPrefix, normalized || "@lucky");
   }
 
   async listGroups() {

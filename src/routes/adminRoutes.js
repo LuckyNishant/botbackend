@@ -4,10 +4,18 @@ const { TAB_NAMES } = require("../services/sheetsService");
 function buildAdminRoutes({ sheetsService, orderService, botController }) {
   const router = express.Router();
 
+  const safe = async (fn, fallback) => {
+    try {
+      return await fn();
+    } catch (_error) {
+      return fallback;
+    }
+  };
+
   router.get("/dashboard", async (_req, res, next) => {
     try {
-      const inventoryRows = await sheetsService.read(TAB_NAMES.inventory);
-      const invoiceRows = await sheetsService.read(TAB_NAMES.invoice);
+      const inventoryRows = await safe(() => sheetsService.read(TAB_NAMES.inventory), []);
+      const invoiceRows = await safe(() => sheetsService.read(TAB_NAMES.invoice), []);
       const dataRows = inventoryRows.slice(1);
       const totalStock = dataRows.reduce((sum, row) => sum + Number(row[2] || 0), 0);
       const lowStockItems = dataRows
@@ -30,9 +38,13 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
         lowStockAlertCount: lowStockItems.length,
         lowStockItems,
         recentOrders: invoiceRows.slice(-10).reverse(),
-        whitelistedNumbers: await botController.getWhitelistedNumbers(),
-        selectedGroups: await botController.getSelectedGroups(),
+        whitelistedNumbers: await safe(() => botController.getWhitelistedNumbers(), []),
+        selectedGroups: await safe(() => botController.getSelectedGroups(), []),
+        availableGroups: await safe(() => botController.getAvailableGroups(), []),
         botEnabled: botController.isEnabled(),
+        botStarted: botController.isStarted(),
+        botLink: botController.getLinkStatus(),
+        mentionPrefix: botController.getMentionPrefix(),
         notificationsEnabled: orderService.notificationsEnabled
       });
     } catch (error) {
@@ -43,6 +55,12 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
   router.post("/inventory/update-stock", async (req, res, next) => {
     try {
       const { model, part, delta } = req.body;
+      if (!model || !part) {
+        return res.status(400).json({ error: "model and part are required" });
+      }
+      if (!Number.isFinite(Number(delta))) {
+        return res.status(400).json({ error: "delta must be a number" });
+      }
       const item = await sheetsService.findInventoryItem(model, part);
       if (!item) return res.status(404).json({ error: "Inventory item not found" });
       const newStock = item.stock + Number(delta || 0);
@@ -86,17 +104,45 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
 
   router.post("/bot/toggle", async (req, res, next) => {
     try {
-    const { enabled } = req.body;
-    await botController.setEnabled(Boolean(enabled));
-    res.json({ ok: true, enabled: botController.isEnabled() });
+      const { enabled } = req.body;
+      await botController.setEnabled(Boolean(enabled));
+      res.json({
+        ok: true,
+        enabled: botController.isEnabled(),
+        started: botController.isStarted(),
+        link: botController.getLinkStatus()
+      });
     } catch (error) {
       next(error);
     }
   });
 
+  router.get("/bot/link-status", async (_req, res) => {
+    res.json({ ok: true, link: botController.getLinkStatus() });
+  });
+
   router.get("/bot/groups", async (_req, res, next) => {
     try {
       res.json({ groups: await botController.getSelectedGroups() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/bot/groups/sync", async (_req, res, next) => {
+    try {
+      const groups = await botController.getAvailableGroups();
+      res.json({ groups });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/bot/groups/replace", async (req, res, next) => {
+    try {
+      const { groups } = req.body;
+      const selected = await botController.replaceGroups(groups);
+      res.json({ ok: true, groups: selected });
     } catch (error) {
       next(error);
     }
@@ -145,6 +191,17 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
     try {
       await botController.removeWhitelistNumber(req.params.phoneNumber);
       res.json({ ok: true, numbers: await botController.getWhitelistedNumbers() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/bot/mention-prefix", async (req, res, next) => {
+    try {
+      const { mentionPrefix } = req.body;
+      if (!mentionPrefix) return res.status(400).json({ error: "mentionPrefix is required" });
+      const saved = await botController.setMentionPrefix(mentionPrefix);
+      res.json({ ok: true, mentionPrefix: saved });
     } catch (error) {
       next(error);
     }

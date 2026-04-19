@@ -18,6 +18,10 @@ class WhatsAppBot {
     this.client = null;
     this.started = false;
     this.startPromise = null;
+    this.lastQr = "";
+    this.lastError = "";
+    this.connectedAt = null;
+    this.mentionPrefix = config.bot.mentionPrefix || "@lucky";
   }
 
   setEnabled(enabled) {
@@ -32,8 +36,28 @@ class WhatsAppBot {
     return this.started;
   }
 
+  getLinkStatus() {
+    return {
+      started: this.started,
+      enabled: this.enabled,
+      qr: this.lastQr,
+      lastError: this.lastError,
+      connectedAt: this.connectedAt
+    };
+  }
+
+  getMentionPrefix() {
+    return this.mentionPrefix;
+  }
+
   async hydrateControlSettings() {
     this.enabled = await this.controlService.getBotEnabled(config.bot.enabled);
+    this.mentionPrefix = await this.controlService.getMentionPrefix(config.bot.mentionPrefix || "@lucky");
+  }
+
+  async setMentionPrefix(prefix) {
+    this.mentionPrefix = await this.controlService.setMentionPrefix(prefix);
+    return this.mentionPrefix;
   }
 
   async getSelectedGroups() {
@@ -46,6 +70,49 @@ class WhatsAppBot {
 
   async removeGroup(groupId) {
     return this.controlService.removeGroup(groupId);
+  }
+
+  async replaceGroups(groups = []) {
+    const incoming = Array.isArray(groups) ? groups : [];
+    const normalized = incoming
+      .filter((row) => row && row.groupId)
+      .map((row) => ({
+        groupId: String(row.groupId).trim(),
+        groupName: String(row.groupName || "").trim()
+      }));
+
+    const existing = await this.controlService.listGroups();
+    const existingIds = new Set(existing.map((row) => row.groupId));
+    const nextIds = new Set(normalized.map((row) => row.groupId));
+
+    for (const group of existing) {
+      if (!nextIds.has(group.groupId)) {
+        await this.controlService.removeGroup(group.groupId);
+      }
+    }
+
+    for (const group of normalized) {
+      await this.controlService.addGroup(group.groupId, group.groupName);
+    }
+
+    return this.controlService.listGroups();
+  }
+
+  async getAvailableGroups() {
+    if (!this.client) return [];
+    try {
+      const chats = await this.client.getChats();
+      return chats
+        .filter((chat) => chat.isGroup)
+        .map((chat) => ({
+          groupId: chat.id?._serialized || "",
+          groupName: chat.name || "Unnamed Group"
+        }))
+        .filter((row) => row.groupId);
+    } catch (error) {
+      this.lastError = error.message || "Failed to sync WhatsApp groups";
+      return [];
+    }
   }
 
   async getWhitelistedNumbers() {
@@ -78,13 +145,22 @@ class WhatsAppBot {
   }
 
   registerHandlers(client) {
-    client.on("qr", (qr) => qrcode.generate(qr, { small: true }));
+    client.on("qr", (qr) => {
+      this.lastQr = qr;
+      this.lastError = "";
+      qrcode.generate(qr, { small: true });
+    });
     client.on("ready", () => {
       this.started = true;
+      this.lastQr = "";
+      this.lastError = "";
+      this.connectedAt = new Date().toISOString();
       console.log("WhatsApp bot ready");
     });
     client.on("disconnected", (reason) => {
       this.started = false;
+      this.connectedAt = null;
+      this.lastError = String(reason || "WhatsApp disconnected");
       console.warn("WhatsApp bot disconnected:", reason);
     });
     client.on("message", async (message) => {
@@ -126,7 +202,7 @@ class WhatsAppBot {
       location: "Unknown"
     };
 
-    const parsed = parseBotMessage(message.body, config.bot.mentionPrefix);
+    const parsed = parseBotMessage(message.body, this.mentionPrefix);
     if (parsed) {
       const item = await this.sheetsService.findInventoryItem(parsed.model, parsed.part);
       if (!item) {
@@ -177,7 +253,11 @@ class WhatsAppBot {
     await this.controlService.setBotEnabled(this.enabled);
 
     if (this.enabled) {
-      await this.start({ force: true });
+      try {
+        await this.start({ force: true });
+      } catch (error) {
+        this.lastError = error.message || "Failed to start WhatsApp bot";
+      }
     } else if (this.client) {
       await this.stop();
     }
@@ -208,6 +288,8 @@ class WhatsAppBot {
       })
       .catch((error) => {
         this.started = false;
+        this.connectedAt = null;
+        this.lastError = error.message || "Failed to initialize WhatsApp client";
         this.client = null;
         throw error;
       })
@@ -226,6 +308,7 @@ class WhatsAppBot {
     } finally {
       this.client = null;
       this.started = false;
+      this.connectedAt = null;
     }
   }
 }
