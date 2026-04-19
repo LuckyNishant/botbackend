@@ -86,6 +86,34 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
     }
   });
 
+  router.post("/inventory/add-item", async (req, res, next) => {
+    try {
+      const { model, part, stock, price, compatible } = req.body;
+      if (!model || !part) {
+        return res.status(400).json({ error: "model and part are required" });
+      }
+      const existing = await sheetsService.findInventoryItem(model, part);
+      if (existing) {
+        return res.status(409).json({ error: "Inventory item already exists. Use stock update." });
+      }
+      const parsedStock = Number(stock || 0);
+      const parsedPrice = Number(price || 0);
+      if (!Number.isFinite(parsedStock) || !Number.isFinite(parsedPrice)) {
+        return res.status(400).json({ error: "stock and price must be numeric values" });
+      }
+      await sheetsService.appendRow(TAB_NAMES.inventory, [
+        String(model).trim().toUpperCase(),
+        String(part).trim().toLowerCase(),
+        parsedStock,
+        parsedPrice,
+        String(compatible || "").trim()
+      ]);
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/purchase/add", async (req, res, next) => {
     try {
       const { model, part, qty, cost, supplier } = req.body;
@@ -146,6 +174,9 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
 
   router.get("/bot/groups/sync", async (_req, res, next) => {
     try {
+      if (!botController.isEnabled()) {
+        return res.status(400).json({ error: "Bot is disabled. Enable bot first." });
+      }
       const groups = await botController.getAvailableGroups();
       res.json({ groups });
     } catch (error) {

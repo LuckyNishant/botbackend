@@ -99,9 +99,15 @@ class WhatsAppBot {
   }
 
   async getAvailableGroups() {
-    if (!this.client) return [];
+    const client = this.client;
+    if (!client || typeof client.getChats !== "function") {
+      this.lastError = this.enabled
+        ? "WhatsApp client not ready yet. Enable bot and wait for QR/connection."
+        : "Bot is disabled.";
+      return [];
+    }
     try {
-      const chats = await this.client.getChats();
+      const chats = await client.getChats();
       return chats
         .filter((chat) => chat.isGroup)
         .map((chat) => ({
@@ -309,6 +315,7 @@ class WhatsAppBot {
       this.client = null;
       this.started = false;
       this.connectedAt = null;
+      this.lastQr = "";
     }
   }
 }
