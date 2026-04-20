@@ -29,7 +29,56 @@ class SheetsService {
       ["https://www.googleapis.com/auth/spreadsheets"]
     );
     this.sheets = google.sheets({ version: "v4", auth });
-    this.ready = true;
+    
+    try {
+      await this.ensureTabsExist();
+      this.ready = true;
+    } catch (error) {
+      console.error("Sheets initialization/tab check failed:", error.message);
+      // We don't set ready to true if we can't even get sheet info (likely permission or ID issue)
+    }
+  }
+
+  async ensureTabsExist() {
+    const spreadsheet = await this.sheets.spreadsheets.get({
+      spreadsheetId: this.sheetId
+    });
+    const existingTabs = spreadsheet.data.sheets.map(s => s.properties.title);
+    const requiredTabs = Object.values(TAB_NAMES);
+    const missingTabs = requiredTabs.filter(tab => !existingTabs.includes(tab));
+
+    if (missingTabs.length > 0) {
+      console.log(`Creating missing tabs: ${missingTabs.join(", ")}`);
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.sheetId,
+        requestBody: {
+          requests: missingTabs.map(title => ({
+            addSheet: { properties: { title } }
+          }))
+        }
+      });
+      
+      // Initialize headers for new tabs
+      for (const tab of missingTabs) {
+        let headers = [];
+        if (tab === TAB_NAMES.inventory) headers = [["Model", "Part", "Stock", "Price", "Compatible"]];
+        if (tab === TAB_NAMES.invoice) headers = [["Date", "Customer", "Model", "Part", "Qty", "Price", "Total"]];
+        if (tab === TAB_NAMES.purchase) headers = [["Date", "Model", "Part", "Qty", "Cost", "Supplier"]];
+        if (tab === TAB_NAMES.customers) headers = [["Number", "Shop", "Location", "Type"]];
+        if (tab === TAB_NAMES.whitelist) headers = [["Number", "Label"]];
+        if (tab === TAB_NAMES.groups) headers = [["GroupId", "GroupName"]];
+        if (tab === TAB_NAMES.admin) headers = [["Key", "Value"]];
+        
+        if (headers.length) {
+          await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.sheetId,
+            range: `${tab}!A1`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: headers }
+          });
+        }
+      }
+    }
   }
 
   getServiceEmail() {
@@ -37,8 +86,12 @@ class SheetsService {
   }
 
   handleError(error) {
-    if (error.message.includes("caller does not have permission") || error.code === 403) {
-      throw new Error(`PERMISSIONS_ERROR: The Google Service Account (${config.sheets.serviceEmail}) does not have permission to access the sheet. Please share the Google Sheet with this email as an EDITOR.`);
+    const msg = error.message.toLowerCase();
+    if (msg.includes("caller does not have permission") || error.code === 403) {
+      throw new Error(`PERMISSIONS_ERROR: The Google Service Account (${config.sheets.serviceEmail}) does not have permission. Please share the sheet with this email as EDITOR.`);
+    }
+    if (msg.includes("unable to parse range") || msg.includes("range") || error.code === 400) {
+      throw new Error(`STRUCTURE_ERROR: Sheet tab "${TAB_NAMES.inventory}" (or others) could not be found or initialized. I am attempting to fix this. Please refresh in 10 seconds.`);
     }
     throw error;
   }

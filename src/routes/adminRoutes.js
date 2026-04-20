@@ -4,12 +4,19 @@ const { TAB_NAMES } = require("../services/sheetsService");
 function buildAdminRoutes({ sheetsService, orderService, botController }) {
   const router = express.Router();
 
+  const ensureReady = async () => {
+    if (!sheetsService.ready) {
+      await sheetsService.init();
+    }
+  };
+
   const safe = async (fn, fallback) => {
     try {
+      await ensureReady();
       return await fn();
     } catch (error) {
-      if (error.message.includes("PERMISSIONS_ERROR")) {
-        throw error; // Let permission errors bubble up to inform the user
+      if (error.message.includes("PERMISSIONS_ERROR") || error.message.includes("STRUCTURE_ERROR")) {
+        throw error;
       }
       return fallback;
     }
@@ -73,6 +80,7 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
 
   router.post("/inventory/update-stock", async (req, res, next) => {
     try {
+      await ensureReady();
       const { model, part, delta } = req.body;
       if (!model || !part) {
         return res.status(400).json({ error: "model and part are required" });
@@ -92,6 +100,7 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
 
   router.post("/inventory/add-item", async (req, res, next) => {
     try {
+      await ensureReady();
       const { model, part, stock, price, compatible } = req.body;
       if (!model || !part) {
         return res.status(400).json({ error: "model and part are required" });
@@ -120,6 +129,7 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
 
   router.post("/purchase/add", async (req, res, next) => {
     try {
+      await ensureReady();
       const { model, part, qty, cost, supplier } = req.body;
       const date = new Date().toISOString();
       await sheetsService.appendRow(TAB_NAMES.purchase, [date, model, part, qty, cost, supplier]);
