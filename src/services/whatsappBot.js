@@ -1,5 +1,5 @@
 const qrcode = require("qrcode-terminal");
-const { Client, LocalAuth, NoAuth } = require("whatsapp-web.js");
+const { Client, NoAuth } = require("whatsapp-web.js");
 const config = require("../config");
 const {
   parseBotMessage,
@@ -18,7 +18,10 @@ class WhatsAppBot {
     this.client = null;
     this.started = false;
     this.startPromise = null;
+    this.starting = false;
+    this.startingAt = null;
     this.lastQr = "";
+    this.lastQrAt = null;
     this.lastError = "";
     this.connectedAt = null;
     this.mentionPrefix = config.bot.mentionPrefix || "@lucky";
@@ -39,8 +42,11 @@ class WhatsAppBot {
   getLinkStatus() {
     return {
       started: this.started,
+      starting: this.starting,
+      startingAt: this.startingAt,
       enabled: this.enabled,
       qr: this.lastQr,
+      qrGeneratedAt: this.lastQrAt,
       lastError: this.lastError,
       connectedAt: this.connectedAt
     };
@@ -153,18 +159,24 @@ class WhatsAppBot {
   registerHandlers(client) {
     client.on("qr", (qr) => {
       this.lastQr = qr;
+      this.lastQrAt = new Date().toISOString();
       this.lastError = "";
       qrcode.generate(qr, { small: true });
     });
     client.on("ready", () => {
       this.started = true;
+      this.starting = false;
+      this.startingAt = null;
       this.lastQr = "";
+      this.lastQrAt = null;
       this.lastError = "";
       this.connectedAt = new Date().toISOString();
       console.log("WhatsApp bot ready");
     });
     client.on("disconnected", (reason) => {
       this.started = false;
+      this.starting = false;
+      this.startingAt = null;
       this.connectedAt = null;
       this.lastError = String(reason || "WhatsApp disconnected");
       console.warn("WhatsApp bot disconnected:", reason);
@@ -286,14 +298,21 @@ class WhatsAppBot {
     }
 
     const client = this.createClient();
+    this.starting = true;
+    this.startingAt = new Date().toISOString();
+    this.lastError = "";
     this.startPromise = client
       .initialize()
       .then(() => {
         this.started = true;
+        this.starting = false;
+        this.startingAt = null;
         return true;
       })
       .catch((error) => {
         this.started = false;
+        this.starting = false;
+        this.startingAt = null;
         this.connectedAt = null;
         this.lastError = error.message || "Failed to initialize WhatsApp client";
         this.client = null;
@@ -314,9 +333,21 @@ class WhatsAppBot {
     } finally {
       this.client = null;
       this.started = false;
+      this.starting = false;
+      this.startingAt = null;
       this.connectedAt = null;
       this.lastQr = "";
+      this.lastQrAt = null;
     }
+  }
+
+  async restartLinkSession() {
+    this.lastError = "";
+    await this.stop();
+    this.enabled = true;
+    await this.controlService.setBotEnabled(true);
+    await this.start({ force: true });
+    return this.getLinkStatus();
   }
 }
 

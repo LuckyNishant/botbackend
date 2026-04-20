@@ -32,35 +32,58 @@ class SheetsService {
     this.ready = true;
   }
 
+  getServiceEmail() {
+    return config.sheets.serviceEmail;
+  }
+
+  handleError(error) {
+    if (error.message.includes("caller does not have permission") || error.code === 403) {
+      throw new Error(`PERMISSIONS_ERROR: The Google Service Account (${config.sheets.serviceEmail}) does not have permission to access the sheet. Please share the Google Sheet with this email as an EDITOR.`);
+    }
+    throw error;
+  }
+
   async read(tab, range = "A:Z") {
     if (!this.ready) return [];
-    const result = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.sheetId,
-      range: `${tab}!${range}`
-    });
-    return result.data.values || [];
+    try {
+      const result = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.sheetId,
+        range: `${tab}!${range}`
+      });
+      return result.data.values || [];
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
   async appendRow(tab, row) {
     if (!this.ready) return;
-    await this.sheets.spreadsheets.values.append({
-      spreadsheetId: this.sheetId,
-      range: `${tab}!A:Z`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [row]
-      }
-    });
+    try {
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.sheetId,
+        range: `${tab}!A:Z`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [row]
+        }
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
   async updateRange(tab, range, values) {
     if (!this.ready) return;
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId: this.sheetId,
-      range: `${tab}!${range}`,
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values }
-    });
+    try {
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.sheetId,
+        range: `${tab}!${range}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values }
+      });
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
   async findInventoryItem(model, part) {

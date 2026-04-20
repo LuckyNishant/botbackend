@@ -7,7 +7,10 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
   const safe = async (fn, fallback) => {
     try {
       return await fn();
-    } catch (_error) {
+    } catch (error) {
+      if (error.message.includes("PERMISSIONS_ERROR")) {
+        throw error; // Let permission errors bubble up to inform the user
+      }
       return fallback;
     }
   };
@@ -59,6 +62,7 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
         notificationsEnabled: await safe(() => orderService.notificationsEnabled, true),
         diagnostics: {
           sheetsReady: Boolean(sheetsService.ready),
+          serviceEmail: sheetsService.getServiceEmail(),
           serverTime: new Date().toISOString()
         }
       });
@@ -162,6 +166,15 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
 
   router.get("/bot/link-status", async (_req, res) => {
     res.json({ ok: true, link: botController.getLinkStatus() });
+  });
+
+  router.post("/bot/restart-link", async (_req, res, next) => {
+    try {
+      const link = await botController.restartLinkSession();
+      res.json({ ok: true, link });
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.get("/bot/groups", async (_req, res, next) => {
