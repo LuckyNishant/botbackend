@@ -177,6 +177,12 @@ function buildAdminRoutes({ sheetsService, orderService, botController }) {
       if (!botController.isEnabled()) {
         return res.status(400).json({ error: "Bot is disabled. Enable bot first." });
       }
+      if (!botController.isStarted()) {
+        return res.status(400).json({
+          error:
+            "WhatsApp not connected yet. Scan QR first, wait for Connected status, then sync groups."
+        });
+      }
       const groups = await botController.getAvailableGroups();
       res.json({ groups });
     } catch (error) {

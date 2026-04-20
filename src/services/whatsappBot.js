@@ -1,5 +1,5 @@
 const qrcode = require("qrcode-terminal");
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const { Client, LocalAuth, NoAuth } = require("whatsapp-web.js");
 const config = require("../config");
 const {
   parseBotMessage,
@@ -138,7 +138,7 @@ class WhatsAppBot {
 
     const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
     this.client = new Client({
-      authStrategy: new LocalAuth({ clientId: config.bot.sessionName }),
+      authStrategy: new NoAuth(),
       puppeteer: {
         headless: true,
         executablePath: executablePath || undefined,

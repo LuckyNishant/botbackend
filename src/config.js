@@ -19,8 +19,7 @@ module.exports = {
     mentionPrefix: (process.env.BOT_MENTION_PREFIX || "@bot").toLowerCase(),
     enabled: String(process.env.BOT_ENABLED || "true").toLowerCase() === "true",
     allowedGroups: parseCsv(process.env.ALLOWED_GROUP_IDS),
-    allowedPhones: parseCsv(process.env.ALLOWED_PHONE_NUMBERS),
-    sessionName: process.env.WHATSAPP_SESSION_NAME || "lucky-mobile-bot"
+    allowedPhones: parseCsv(process.env.ALLOWED_PHONE_NUMBERS)
   },
   cors: {
     allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS)
